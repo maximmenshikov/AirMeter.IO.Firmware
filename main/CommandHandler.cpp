@@ -4,14 +4,19 @@
 #include "ViewCommands.h"
 
 
-CommandHandler::CommandHandler(WifiTask& pWifi, GeneralSettings& pSettings, DataManagerStore& pDataManager, MqttManager& pMqttManager): 
-    HttpUrlHandler({"/command"}, HTTP_POST ), _wifi(pWifi),  _settings(pSettings) {
+CommandHandler::CommandHandler(WifiTask         &pWifi,
+                               GeneralSettings  &pSettings,
+                               DataManagerStore &pDataManager,
+                               MqttManager      &pMqttManager) :
+  HttpUrlHandler({ "/command" }, HTTP_POST),
+  _wifi(pWifi), _settings(pSettings)
+{
     RegisterCommand(new CalibrationCommand(pSettings));
     RegisterCommand(new SaveSettingsCommand(pSettings));
     RegisterCommand(new LoadSettingsCommand(pSettings));
-    RegisterCommand(new GetAvailableWifiNetworksCommand(pSettings,pWifi));
+    RegisterCommand(new GetAvailableWifiNetworksCommand(pSettings, pWifi));
     RegisterCommand(new GetCurrentWifiNetworkCommand(pSettings));
-    RegisterCommand(new SelectWifiNetworkCommand(pSettings,pWifi));
+    RegisterCommand(new SelectWifiNetworkCommand(pSettings, pWifi));
     RegisterCommand(new GetLatestDataCommand());
     RegisterCommand(new GetSystemInfoCommand(pSettings));
     RegisterCommand(new GetHistoricalDataCommand(pDataManager));
@@ -19,10 +24,12 @@ CommandHandler::CommandHandler(WifiTask& pWifi, GeneralSettings& pSettings, Data
     RegisterCommand(new MqttManagementCommand(pMqttManager, pSettings));
 }
 
-CommandHandler::~CommandHandler() {
-
+CommandHandler::~CommandHandler()
+{
 }
 
-void CommandHandler::ProcessRequest(HttpRequest *pReq) {
+void
+CommandHandler::ProcessRequest(HttpRequest *pReq)
+{
     ProcessAsJsonRequest(pReq);
 }
