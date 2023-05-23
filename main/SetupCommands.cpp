@@ -16,7 +16,6 @@ SaveSettingsCommand::Process(Json &pJson, Json &pResult)
     if (pJson.HasProperty("DeviceName"))
         _settings.SetDeviceName(pJson.GetStringProperty("DeviceName"));
 
-
     if (pJson.HasProperty("EnableDhcpNtp"))
         _settings.SetEnableDhcpNtp(pJson.GetBoolProperty("EnableDhcpNtp"));
 
@@ -31,7 +30,6 @@ SaveSettingsCommand::Process(Json &pJson, Json &pResult)
         _settings.SetSecondaryNtpServer(
             pJson.GetStringProperty("SecondaryNtpServer"));
 
-
     if (pJson.HasProperty("Co2SensorType"))
     {
         auto sensor = pJson.GetIntProperty("Co2SensorType");
@@ -41,20 +39,20 @@ SaveSettingsCommand::Process(Json &pJson, Json &pResult)
         }
     }
 
-
     _settings.Save();
 }
+
 std::string
 SaveSettingsCommand::GetName()
 {
     return "SAVESETTINGS";
 }
 
-
 LoadSettingsCommand::LoadSettingsCommand(GeneralSettings &pSettings) :
   _settings(pSettings)
 {
 }
+
 void
 LoadSettingsCommand::Process(Json &pJson, Json &pResult)
 {
@@ -70,6 +68,7 @@ LoadSettingsCommand::Process(Json &pJson, Json &pResult)
     pResult.CreateNumberProperty("Co2SensorType",
                                  (int)_settings.GetCO2SensorType());
 }
+
 std::string
 LoadSettingsCommand::GetName()
 {
@@ -81,6 +80,7 @@ GetSystemInfoCommand::GetSystemInfoCommand(GeneralSettings &pSettings) :
   _settings(pSettings)
 {
 }
+
 void
 GetSystemInfoCommand::Process(Json &pJson, Json &pResult)
 {
@@ -98,29 +98,33 @@ GetSystemInfoCommand::GetName()
     return "SYSTEMINFO";
 }
 
-
 GetAvailableWifiNetworksCommand::GetAvailableWifiNetworksCommand(
     GeneralSettings &pSettings,
     WifiTask        &pWifi) :
-  _settings(pSettings),
-  _wifi(pWifi)
+    _settings(pSettings), _wifi(pWifi)
 {
 }
+
 void
 GetAvailableWifiNetworksCommand::Process(Json &pJson, Json &pResult)
 {
-    pResult.CreateStringProperty("Status", "true");
     std::vector<Json *>   networks;
     WifiAvailableNetworks availableNetworks;
+
+    pResult.CreateStringProperty("Status", "true");
     _wifi.ScanForAvailableNetworks(availableNetworks);
+
     auto configured = _wifi.GetNetworks();
     for (auto availableNetwork : availableNetworks)
     {
+        char apMacAddr[20];
+
         if (configured.contains(availableNetwork->ssid))
             continue;
+
         auto network = new Json();
         network->CreateStringProperty("ssid", availableNetwork->ssid.c_str());
-        char apMacAddr[20];
+
         snprintf(apMacAddr, sizeof(apMacAddr), "%.2X:%.2X:%.2X:%.2X:%.2X:%.2X",
                  availableNetwork->bssid[0], availableNetwork->bssid[1],
                  availableNetwork->bssid[2], availableNetwork->bssid[3],
@@ -150,12 +154,15 @@ void
 GetCurrentWifiNetworkCommand::Process(Json &pJson, Json &pResult)
 {
     pResult.CreateStringProperty("Status", "true");
+
     for (auto groupPair : ValueController::GetCurrent().GetGroups())
     {
         Json *groupJson = nullptr;
+
         for (auto keyPair : groupPair.second->SourcesByName)
         {
             auto source = keyPair.second->DefaultSource;
+
             if (source->GetFlags() & NETWORK_INFO)
             {
                 if (groupJson == nullptr)
@@ -163,6 +170,7 @@ GetCurrentWifiNetworkCommand::Process(Json &pJson, Json &pResult)
                 source->SerialiseToJsonProperty(*groupJson);
             }
         }
+
         if (groupJson != nullptr)
             delete groupJson;
     }
@@ -174,11 +182,9 @@ GetCurrentWifiNetworkCommand::GetName()
     return "GETNETWORKINFO";
 }
 
-
 SelectWifiNetworkCommand::SelectWifiNetworkCommand(GeneralSettings &pSettings,
                                                    WifiTask        &pWifi) :
-  _settings(pSettings),
-  _wifi(pWifi)
+    _settings(pSettings), _wifi(pWifi)
 {
 }
 
@@ -208,9 +214,8 @@ SelectWifiNetworkCommand::Process(Json &pJson, Json &pResult)
         if (mode == "Test" || mode == "Apply")
         {
             if (_testingConnect || _applyingConnect)
-            {
                 return;
-            }
+
             if (!pJson.HasProperty("Ssid") || !pJson.HasProperty("Password") ||
                 !pJson.HasProperty("Auth") || !pJson.HasProperty("Id") ||
                 (mode == "Apply" && !pJson.HasProperty("MakeDefault")))
@@ -218,6 +223,7 @@ SelectWifiNetworkCommand::Process(Json &pJson, Json &pResult)
                 pResult.CreateBoolProperty("Status", false);
                 return;
             }
+
             auto lastId = pJson.GetIntProperty("Id");
             if (lastId == _lastId)
                 return;
@@ -243,17 +249,23 @@ SelectWifiNetworkCommand::Process(Json &pJson, Json &pResult)
         {
             std::vector<Json *> networks;
             auto                connectionInfo = _wifi.GetConnectionInfo();
+
             for (auto configuredNetwork : _wifi.GetNetworks())
             {
                 auto network = new Json();
-                network->CreateStringProperty("ssid",
-                                              configuredNetwork.second->ssid);
+
+                network->CreateStringProperty(
+                    "ssid", configuredNetwork.second->ssid);
                 network->CreateStringProperty(
                     "authMode", configuredNetwork.second->authMode);
                 network->CreateNumberProperty(
                     "priority", (int)configuredNetwork.second->priority);
+
                 if (configuredNetwork.second->ssid == connectionInfo->ssid)
                 {
+                    std::string dnsServers = "";
+                    std::string ntpServers = "";
+
                     auto connectionJson =
                         network->CreateObjectProperty("connection");
                     connectionJson->CreateNumberProperty(
@@ -264,8 +276,7 @@ SelectWifiNetworkCommand::Process(Json &pJson, Json &pResult)
                         "ipv4Gateway", connectionInfo->ipv4Gateway);
                     connectionJson->CreateStringProperty(
                         "ipv4Netmask", connectionInfo->ipv4Netmask);
-                    std::string dnsServers = "";
-                    std::string ntpServers = "";
+
                     for (auto server : connectionInfo->dnsServers)
                     {
                         if (dnsServers.size() != 0)
@@ -298,6 +309,7 @@ SelectWifiNetworkCommand::Process(Json &pJson, Json &pResult)
                 pResult.CreateBoolProperty("Status", false);
                 return;
             }
+
             auto ssid = pJson.GetStringProperty("Ssid");
             auto connectionInfo = _wifi.GetConnectionInfo();
             if (ssid == connectionInfo->ssid ||
@@ -316,6 +328,7 @@ SelectWifiNetworkCommand::Process(Json &pJson, Json &pResult)
                 pResult.CreateBoolProperty("Status", false);
                 return;
             }
+
             auto ssid = pJson.GetStringProperty("Ssid");
             auto priority = pJson.GetUIntProperty("Priority");
             auto result = _wifi.SetConfigurationPriority(ssid, priority);
@@ -344,8 +357,7 @@ SelectWifiNetworkCommand::GetName()
 
 DataManagementCommand::DataManagementCommand(GeneralSettings  &pSettings,
                                              DataManagerStore &pManager) :
-  _settings(pSettings),
-  _manager(pManager)
+    _settings(pSettings), _manager(pManager)
 {
 }
 
@@ -359,6 +371,7 @@ DataManagementCommand::Process(Json &pJson, Json &pResult)
         {
             std::vector<Json *> availableValues;
             std::vector<Json *> setValues;
+
             for (auto groupPair : ValueController::GetCurrent().GetGroups())
             {
                 for (auto keyPair : groupPair.second->SourcesByName)
@@ -534,8 +547,7 @@ DataManagementCommand::GetName()
 
 MqttManagementCommand::MqttManagementCommand(MqttManager     &pMqttManager,
                                              GeneralSettings &pSettings) :
-  _mqttManager(pMqttManager),
-  _settings(pSettings)
+    _mqttManager(pMqttManager), _settings(pSettings)
 {
 }
 
