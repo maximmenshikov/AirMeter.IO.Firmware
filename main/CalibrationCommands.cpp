@@ -55,7 +55,7 @@ CalibrationCommand::Process(Json &pJson, Json &pResult)
                 pJson.HasProperty("Baseline"))
             {
                 auto enable = pJson.GetBoolProperty("EnableABC");
-                auto cycleLenhth = pJson.GetIntProperty("ABCHoursPerCycle");
+                auto cycleLength = pJson.GetIntProperty("ABCHoursPerCycle");
                 auto baseLine = pJson.GetIntProperty("Baseline");
 
                 if (enable)
@@ -65,7 +65,7 @@ CalibrationCommand::Process(Json &pJson, Json &pResult)
                     if (method != nullptr)
                     {
                         method->Invoke(
-                            { { .i = baseLine }, { .i = cycleLenhth } });
+                            { { .i = baseLine }, { .i = cycleLength } });
                         success = true;
                     }
                 }
