@@ -36,18 +36,21 @@ WebContentHandler::ProcessRequest(HttpRequest *pReq)
 
     for (auto file : _files)
     {
-        printf("File: %s\n", file);
         const int SizeToRead = 1024 * 16;
+
+        printf("File: %s\n", file);
         if (pReq->GetUri() == file || bzIndex.compare(file) == 0 ||
             gzUrl.compare(file) == 0 || brUrl.compare(file) == 0)
         {
+            char       *buf;
             std::string fn = file == std::string("/")
                 ? std::string("/web/index.html")
                 : std::string("/web") + file;
+
             printf("FN: %s\n", fn.c_str());
 
             auto fp = fopen(fn.c_str(), "r");
-            if (!fp)
+            if (fp == NULL)
             {
                 printf("failed to openfile\n");
                 return;
@@ -57,7 +60,14 @@ WebContentHandler::ProcessRequest(HttpRequest *pReq)
             auto sz = ftell(fp);
             printf("File is %lu bytes\n", sz);
             rewind(fp);
-            char *buf = (char *)malloc(SizeToRead);
+
+            buf = (char *)malloc(SizeToRead);
+            if (buf == NULL)
+            {
+                fclose(fp);
+                return;
+            }
+
             if (hasEnding(fn, ".html") || hasEnding(fn, ".htm"))
             {
                 pReq->SetType("text/html;charset=UTF-8");
@@ -100,10 +110,12 @@ WebContentHandler::ProcessRequest(HttpRequest *pReq)
                 pReq->SetType("image/png.gz");
                 pReq->SetHeader("Content-Encoding", "gzip");
             }
+
             while (sz > 0)
             {
                 auto read =
                     fread(buf, 1, sz < SizeToRead ? sz : SizeToRead, fp);
+
                 if (read > 0)
                 {
                     pReq->SendChunk(buf, read);
@@ -121,7 +133,6 @@ WebContentHandler::ProcessRequest(HttpRequest *pReq)
     }
 
     printf("Got content request: %s\n", pReq->GetUri().c_str());
-    return;
 }
 
 std::vector<const char *>
@@ -131,6 +142,7 @@ WebContentHandler::GetWebFiles()
     {
         DIR           *d;
         struct dirent *dir;
+
         d = opendir("/web");
         if (d)
         {
@@ -138,6 +150,9 @@ WebContentHandler::GetWebFiles()
             while ((dir = readdir(d)) != NULL)
             {
                 char *path = (char *)calloc(strlen(dir->d_name) + 2, 1);
+                if (path == NULL)
+                    continue;
+
                 path[0] = '/';
                 memcpy(path + 1, dir->d_name, strlen(dir->d_name));
 
@@ -145,11 +160,18 @@ WebContentHandler::GetWebFiles()
                 if (hasEnding(path, ".gz") || hasEnding(path, ".br"))
                 {
                     char *webVisiblePath = (char *)calloc(strlen(path) - 2, 1);
+                    if (webVisiblePath == NULL)
+                    {
+                        continue;
+                    }
+
                     memcpy(webVisiblePath, path, strlen(path) - 3);
                     _webNames.push_back(webVisiblePath);
                 }
                 else
+                {
                     _webNames.push_back(path);
+                }
             }
             closedir(d);
         }
