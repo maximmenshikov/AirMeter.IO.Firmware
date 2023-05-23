@@ -21,11 +21,11 @@ class MainLogicLoop : private StringValueSource, private ScreenManagerNotifier, 
     std::string _timeString = "";
     std::string _version = "";
     std::string _build = "";
-    Value _valUnixTime { .i = 0 };  
-    Value _valTimeString { .s = &_timeString };    
-    Value _valVersion { .s = &_version };    
-    Value _valBuild { .s = &_build }; 
-    Value _valBatteryVolts { .i = 0 };    
+    Value _valUnixTime { .i = 0 };
+    Value _valTimeString { .s = &_timeString };
+    Value _valVersion { .s = &_version };
+    Value _valBuild { .s = &_build };
+    Value _valBatteryVolts { .i = 0 };
     SensorManager* _sensorManager = nullptr;
     GeneralSettings* _generalSettings = nullptr;
     DevicePersonality* _devicePersonality = nullptr;
@@ -35,6 +35,7 @@ class MainLogicLoop : private StringValueSource, private ScreenManagerNotifier, 
     ScreenManager *_screenManager = nullptr;
     BatteryManager *_battery = nullptr;
     WifiTask* _wifi = nullptr;
+    HttpServer *_httpServer = nullptr;
     ScreenDrivers  *_screenDrivers = nullptr;
     I2C* _i2c;
     std::vector<int> ResolveTimeSeries(std::string pName, uint32_t pSecondsInPast, uint32_t pSteps) override;
@@ -48,6 +49,6 @@ class MainLogicLoop : private StringValueSource, private ScreenManagerNotifier, 
 
 public:
     MainLogicLoop();
-    const std::string& GetValuesSourceName() const override; 
+    const std::string& GetValuesSourceName() const override;
     void Run();
 };

@@ -32,10 +32,14 @@ i2ctask(void *arg)
 
 MainLogicLoop::MainLogicLoop()
 {
+    DrawControl *display;
+
     printf("MLL\n");
+
     GpioManager::Setup();
     _i2c = new I2C(GPIO_NUM_4, GPIO_NUM_5);
     _i2c->Scan();
+
     _devicePersonality = DevicePersonality::Load();
     _generalSettings = new GeneralSettings();
     _dataManager = new DataManagerStore();
@@ -43,9 +47,7 @@ MainLogicLoop::MainLogicLoop()
                                        *_i2c, *_dataManager);
     _screenDrivers = new ScreenDrivers();
 
-
-    DrawControl *display;
-    auto         displayConfig = _devicePersonality->GetDisplayConfig();
+    auto displayConfig = _devicePersonality->GetDisplayConfig();
     if (displayConfig.Enabled)
     {
         printf("Loading display driver {%s}\n", displayConfig.Driver.c_str());
@@ -53,10 +55,12 @@ MainLogicLoop::MainLogicLoop()
                                              displayConfig.DriverConfig);
     }
     else
+    {
         display = new NullDrawControl();
+    }
+
     _screenManager = new ScreenManager(*_devicePersonality, display, *this,
                                        *_sensorManager, *this);
-
 
     AddValueSource(new ValueSource(*this, SYSTEM_UNIXTIME, Int, Dimensionless,
                                    _valUnixTime, GET_LATEST_DATA));
@@ -79,14 +83,15 @@ MainLogicLoop::MainLogicLoop()
 bool
 MainLogicLoop::ProcessOnUIThread()
 {
-    bool requiresRedraw = false;
-
+    bool   requiresRedraw = false;
     time_t now;
+
     time(&now);
     if (now / 60 != _lastTimeInMinutes)
     {
-        _lastTimeInMinutes = now / 60;
         char buf[sizeof "07:07:09Z"];
+
+        _lastTimeInMinutes = now / 60;
         strftime(buf, sizeof buf, "%H:%M", gmtime(&now));
         _timeString = buf;
         requiresRedraw = true;
@@ -138,9 +143,12 @@ MainLogicLoop::ProcessOnUIThread()
 void
 MainLogicLoop::Run()
 {
+    CommandHandler         *command = nullptr;
+    CaptiveRedirectHandler *captiveRedirect = nullptr;
+    WebContentHandler      *webContent = nullptr;
 
     _battery = new BatteryManager();
-    auto httpServer = new HttpServer();
+    _httpServer = new HttpServer();
 
 
     if (_generalSettings->GetApPassword().length() == 0)
@@ -155,24 +163,21 @@ MainLogicLoop::Run()
     _wifi->RegisterWithValueController();
     ValueController::GetCurrent().Load();
     _wifi->Init();
-    CommandHandler         *command = nullptr;
-    CaptiveRedirectHandler *captiveRedirect = nullptr;
-    WebContentHandler      *webContent = nullptr;
     _mqtt = new MqttManager(*_generalSettings);
-    httpServer->Start();
+    _httpServer->Start();
 
     command =
         new CommandHandler(*_wifi, *_generalSettings, *_dataManager, *_mqtt);
     webContent = new WebContentHandler();
-    httpServer->AddUrlHandler(webContent);
-    httpServer->AddUrlHandler(command);
+    _httpServer->AddUrlHandler(webContent);
+    _httpServer->AddUrlHandler(command);
     SntpManager *sntp = nullptr;
 
     if (!_wifi->HasConfiguredNetworks())
     {
         _screenManager->ChangeScreen("CAPTIVE");
         captiveRedirect = new CaptiveRedirectHandler();
-        httpServer->AddUrlHandler(captiveRedirect);
+        _httpServer->AddUrlHandler(captiveRedirect);
         _waitingForProvisioning = true;
     }
     else
@@ -197,6 +202,8 @@ MainLogicLoop::ResolveTimeSeries(std::string pName,
 {
     std::vector<int> result(pSteps, 0);
     std::vector<int> resultCounts(pSteps, 0);
+    std::vector<ValueSource *> values;
+    time_t curTime;
 
     auto         pos = pName.find(".");
     ValueSource *valueSource = nullptr;
@@ -204,14 +211,14 @@ MainLogicLoop::ResolveTimeSeries(std::string pName,
     {
         auto group = pName.substr(0, pos);
         auto name = pName.substr(pos + 1, std::string::npos);
+
         valueSource = ValueController::GetCurrent().GetDefault(group, name);
     }
     if (valueSource == nullptr)
         return std::vector<int>();
-    std::vector<ValueSource *> values;
+
     values.push_back(valueSource);
 
-    time_t curTime;
     time(&curTime);
     if (curTime % (pSecondsInPast / pSteps))
         curTime +=
@@ -246,6 +253,7 @@ MainLogicLoop::ResolveTimeSeries(std::string pName,
         read = query.ReadEntries(&resultData);
         esp_task_wdt_reset();
     }
+
     int last = 0;
     for (auto i = 0; i < pSteps; i++)
     {
@@ -268,10 +276,29 @@ MainLogicLoop::GetValuesSourceName() const
 }
 
 
+static void
+PrintBaseFiles(void)
+{
+    DIR           *d;
+    struct dirent *dir;
+
+    d = opendir(pConf.base_path);
+    if (d)
+    {
+        while ((dir = readdir(d)) != NULL)
+        {
+            printf("%s/%s\n", pConf.base_path, dir->d_name);
+        }
+
+        closedir(d);
+    }
+}
+
 bool
 MountSpiffs(esp_vfs_spiffs_conf_t &pConf)
 {
     esp_err_t ret = esp_vfs_spiffs_register(&pConf);
+    size_t    total = 0, used = 0;
 
     if (ret != ESP_OK)
     {
@@ -291,7 +318,6 @@ MountSpiffs(esp_vfs_spiffs_conf_t &pConf)
         return false;
     }
 
-    size_t total = 0, used = 0;
     ret = esp_spiffs_info(NULL, &total, &used);
     if (ret != ESP_OK)
     {
@@ -303,16 +329,7 @@ MountSpiffs(esp_vfs_spiffs_conf_t &pConf)
         ESP_LOGI(TAG, "%s: total: %d, used: %d", pConf.base_path, total, used);
     }
 
-    DIR           *d;
-    struct dirent *dir;
-    d = opendir(pConf.base_path);
-    if (d)
-    {
-        while ((dir = readdir(d)) != NULL)
-            printf("%s/%s\n", pConf.base_path, dir->d_name);
-
-        closedir(d);
-    }
+    PrintBaseFiles();
 
     return true;
 }
@@ -323,6 +340,7 @@ app_main(void)
     PowerManagement::Enable();
     PowerLock lock(PowerLockType::MaxConfigured, "AppMain");
     lock.Aquire();
+
     ESP_LOGI(TAG, "CO2 Monitor Firmware\n");
     ESP_LOGI(TAG, "ESPIDF Version: %s\n", esp_get_idf_version());
 
@@ -330,24 +348,30 @@ app_main(void)
     esp_netif_init();
     esp_event_loop_create_default();
 
-    esp_vfs_spiffs_conf_t conf = { .base_path = "/spiffs",
-                                   .partition_label = NULL,
-                                   .max_files = 5,
-                                   .format_if_mount_failed = true };
+    esp_vfs_spiffs_conf_t conf = {
+        .base_path = "/spiffs",
+        .partition_label = NULL,
+        .max_files = 5,
+        .format_if_mount_failed = true
+    };
 
     MountSpiffs(conf);
 
-    conf = { .base_path = "/web",
-             .partition_label = "web",
-             .max_files = 5,
-             .format_if_mount_failed = true };
+    conf = {
+        .base_path = "/web",
+        .partition_label = "web",
+        .max_files = 5,
+        .format_if_mount_failed = true
+    };
 
     MountSpiffs(conf);
 
-    conf = { .base_path = "/dev",
-             .partition_label = "dev",
-             .max_files = 5,
-             .format_if_mount_failed = true };
+    conf = {
+        .base_path = "/dev",
+        .partition_label = "dev",
+        .max_files = 5,
+        .format_if_mount_failed = true
+    };
 
     MountSpiffs(conf);
     printf("MLLCreate\n");
