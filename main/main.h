@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common.h"
+#include "HttpServer.h"
 #include "SensorManager.h"
 #include "MonitorDisplay.h"
 #include "WifiTask.h"
