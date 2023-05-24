@@ -277,7 +277,7 @@ MainLogicLoop::GetValuesSourceName() const
 
 
 static void
-PrintBaseFiles(void)
+PrintBaseFiles(esp_vfs_spiffs_conf_t &pConf)
 {
     DIR           *d;
     struct dirent *dir;
@@ -329,7 +329,7 @@ MountSpiffs(esp_vfs_spiffs_conf_t &pConf)
         ESP_LOGI(TAG, "%s: total: %d, used: %d", pConf.base_path, total, used);
     }
 
-    PrintBaseFiles();
+    PrintBaseFiles(pConf);
 
     return true;
 }
