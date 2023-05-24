@@ -9,7 +9,7 @@ I2C::I2C(gpio_num_t pSdaPin, gpio_num_t pSclPin) {
 #define I2C_MASTER_RX_BUF_DISABLE   0                          /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_TIMEOUT_MS       1000
 
-	int i2c_master_port = I2C_MASTER_NUM;
+	i2c_port_t i2c_master_port = (i2c_port_t)I2C_MASTER_NUM;
 
     i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
